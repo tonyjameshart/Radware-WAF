@@ -29,9 +29,9 @@ $global:latency_factor = 1.0
 $error_log = (Get-ItemProperty "HKLM:\SOFTWARE\Venafi\Platform")."Base Path" + "Logs\radware-error.log"
 
 $global:General = @{
-"UserName"="Integration_Venafi@cat.com"
-"UserPass" = "H@v3Gr3AtTim3"
-"HostAddress" = "1a5c6c37-85cf-4277-ad25-bc747bf0c8d3"
+"UserName"=" "
+"UserPass" = " "
+"HostAddress" = " "
 "TcpPort" = ""
 "UserPrivKey" = ""
 "AppObjectDN" = ""
@@ -48,7 +48,7 @@ $global:Specific = @{
  "CerttPem" = ""
  "Pkcs12" = "" 
  "SubjAltNames" = @{}
- "SubjectDN" = @{"CN" = "nope"}            
+ "SubjectDN" = @{"CN" = " "}            
 } 
 <######################################################################################################################
 .NAME
