@@ -1,4 +1,4 @@
-﻿<#
+<#
 //-----------------------------------------------------------------------
 // Radware Cloud WAF.ps1
 //
@@ -13,7 +13,7 @@ Bit 2 = Policyable
 Bit 3 = Mandatory
 
 -----BEGIN FIELD DEFINITIONS-----
-Text1|Text1|100
+Text1|Text1|000
 Text2|Text2|000
 Text3|Application Name|110
 Text4|Main Domain|110
@@ -25,31 +25,6 @@ Passwd|Password Field|000
 -----END FIELD DEFINITIONS-----
 #>
 
-$global:latency_factor = 1.0
-$error_log = (Get-ItemProperty "HKLM:\SOFTWARE\Venafi\Platform")."Base Path" + "Logs\radware-error.log"
-
-$global:General = @{
-"UserName"=" "
-"UserPass" = " "
-"HostAddress" = " "
-"TcpPort" = ""
-"UserPrivKey" = ""
-"AppObjectDN" = ""
-"AssetName" = ""
-}
-
-$global:Specific = @{
- "KeySize" = ""
- "ChainPem" = ""
- "ChainPkcs" = ""
- "PrivKeyPem" = ""
- "PrivKeyPemEncrypted" = ""
- "EncryptPass" = ""
- "CerttPem" = ""
- "Pkcs12" = "" 
- "SubjAltNames" = @{}
- "SubjectDN" = @{"CN" = " "}            
-} 
 <######################################################################################################################
 .NAME
     Prepare-KeyStore
@@ -240,15 +215,15 @@ function Install-PrivateKey
 function Install-CertIFicate
 {
 Param(
-        [Parameter(Mandatory=$false,HelpMessage="General Parameters")]
+        [Parameter(Mandatory=$true,HelpMessage="General Parameters")]
         [System.Collections.Hashtable]$General,
-        [Parameter(Mandatory=$false,HelpMessage="Function SpecIFic Parameters")]
+        [Parameter(Mandatory=$true,HelpMessage="Function SpecIFic Parameters")]
         [System.Collections.Hashtable]$SpecIFic
     )
 try
     {
 
- Get-Date | out-file $DEBUG_FILE
+ Get-Date | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue 
 ################################################## Auth ##############################################################
 
          $api_user = $General.UserName
@@ -280,7 +255,7 @@ $API_result = Invoke-RestMethod -Uri $url -Method POST -Body $body -ContentType 
 IF ($API_result.status -eq 'SUCCESS') {
     $SessionToken = $API_result.sessionToken #Required to get client authorization token
     $session_id = $API_result._embedded.user.id
-    "Session Token" | out-file -Append $DEBUG_FILE
+    "Session Token" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     <###########################
       Get Authorization Token 
     ###########################>
@@ -295,9 +270,9 @@ IF ($API_result.status -eq 'SUCCESS') {
         "sessionToken=$SessionToken&" +
         "state=af0IFjsldkj"
     )
-    "URL $url" | out-file -Append $DEBUG_FILE
+    "URL $url" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     $API_result = Invoke-RestMethod -Uri $url -Method GET -ContentType "application/json" -UseBasicParsing
-    "API_result $API_result" | out-file -Append  $DEBUG_FILE
+    "API_result $API_result" | out-file -Append  $DEBUG_FILE -ErrorAction SilentlyContinue
     $authorization_token = $null
     $authorization_token0 = $null
     IF ($API_result.html.head.script.'#text' -match "data.access_token = '(?<ACCESS_TOKEN>.*)'") {
@@ -309,7 +284,7 @@ IF ($API_result.status -eq 'SUCCESS') {
         return @{ Result= "API Token failure:  $($API_result.status)"}
     }
 }
-"End of Auth"  | out-file -Append  $DEBUG_FILE
+"End of Auth"  | out-file -Append  $DEBUG_FILE -ErrorAction SilentlyContinue
 <##########################
 Get all certs loaded in tenant
 ##########################>
@@ -317,38 +292,37 @@ $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $headers.Add("Authorization", "Bearer $authorization_token")
 $headers.Add("requestEntityIds", "$TenantID`n")
 $headers.Add("applicationID", "")
-$headers.Add("Content-Type", "application/json")
 $Tenantcerts = Invoke-RestMethod 'https://portal.radwarecloud.com/v1/configuration/sslcertificates/' -Method 'GET' -Headers $headers
-"All Certs in Tenant" | out-file -Append $DEBUG_FILE
-$Tenantcerts | out-file -Append $DEBUG_FILE
+"All Certs in Tenant" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+$Tenantcerts | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 
 # Gets common name from Venafi
 ################################ Thumbprint from CertIFicate in Venafi ################################################
     $file = (Get-ItemProperty "HKLM:\SOFTWARE\Venafi\Platform")."Base Path" + "Logs\cert.txt"
     $SpecIFic.CertPem > $file
-    $global:vcert = New-Object System.Security.Cryptography.X509CertIFicates.X509CertIFicate2 $file
+    $vcert = New-Object System.Security.Cryptography.X509CertIFicates.X509CertIFicate2 $file
     $thumbprint = $vcert.thumbprint
 
-    "Veanfi Cert fingerprint: $thumbprint" | out-file -Append $DEBUG_FILE
+    "Veanfi Cert fingerprint: $thumbprint" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     $certs = @()
     $vsub = $vcert.Subject
-   "vsub: $vsub" | out-file -Append $DEBUG_FILE
+   "vsub: $vsub" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 
     $v = $vsub.Substring(0, $vsub.IndexOf(','))
     $vcn = $v.Trim("CN=")
-    "VCN $vcn" | out-file -Append $DEBUG_FILE
+    "VCN $vcn" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 # Gets common name from Radware
     foreach ($Tcert in $Tenantcerts){
              $PD = $Tcert.protectedDomains 
              
         IF ($PD -ne '*.generic.com' -and $PD -ne ""){
 
-        $Tcert.certificateChain | out-file -Append $DEBUG_FILE
+        $Tcert.certificateChain | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
             $rsub = $Tcert.protectedDomains
-            "rsub    $rsub" | out-file -Append $DEBUG_FILE
+            "rsub    $rsub" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 
-            $Tcert.protectedDomains | out-file -Append $DEBUG_FILE
-            $PD | out-file -Append $DEBUG_FILE
+            $Tcert.protectedDomains | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+            $PD | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
             $r = $rsub.Substring(0, $rsub.IndexOf(';'))
             $cn = $r.Trim("CN=")
  
@@ -357,7 +331,7 @@ $Tenantcerts | out-file -Append $DEBUG_FILE
              $global:rcert = $Tcert
              $rcn = $cn}
              $global:thumb = $rcert.fingerprint
-             "RCert $rcert" | out-file -Append $DEBUG_FILE
+             "RCert $rcert" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
         } 
 
         IF ($PD -eq '*.generic.com'){ # Gets Generic cert data
@@ -366,12 +340,12 @@ $Tenantcerts | out-file -Append $DEBUG_FILE
         }
 
     } 
-"Certs: $certs"  | out-file -Append $DEBUG_FILE
-"radware cert Thumb : $thumb" | out-file -Append $DEBUG_FILE
-"Venafi cert thumbprint : $thumbprint" | out-file -Append $DEBUG_FILE
-"Place holder cert fingerprint : $fingerprint" | out-file -Append $DEBUG_FILE
-"VCN $vcn"  | out-file -Append $DEBUG_FILE
-"RCN $rcn" | out-file -Append $DEBUG_FILE
+"Certs: $certs"  | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+"radware cert Thumb : $thumb" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+"Venafi cert thumbprint : $thumbprint" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+"Place holder cert fingerprint : $fingerprint" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+"VCN $vcn"  | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+"RCN $rcn" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 <######################################################################################################################
  ######################################################################################################################
                                                 New Certificate
@@ -380,12 +354,12 @@ $rcn is common name from Radware
 $vcn is common name from Venafi
 ######################################################################################################################>
 IF ($vcn -notin $certs){
-"If $vcn not in $certs" | out-file -Append $DEBUG_FILE
+"If $vcn not in $certs" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 <###############################
        Install New Cert
 ###############################>
 $selfsigned = $General.VarBool1.ToString() -eq "True"
-$selfsigned| out-file -Append $DEBUG_FILE
+$selfsigned| out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 If ($selfsigned) { #Checks if Private or Public CA
 #Install Cert 
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
@@ -395,7 +369,7 @@ If ($selfsigned) { #Checks if Private or Public CA
     $headers.Add("Content-Type", "application/json")
     $body = "{`"certificate`":`"$($Specific.CertPem)`",`"chain`":`"$($Specific.ChainPem)`",`"key`":`"$($Specific.PrivKeyPem)`",`"passphrase`":`"$($Specific.EncryptPass)`"}"
     $response = Invoke-RestMethod 'https://portal.radwarecloud.com/v1/configuration/sslcertificates/secret' -Method 'POST' -Headers $headers -Body $body -TimeoutSec 30
-    $response | out-file -Append $DEBUG_FILE
+    $response | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     }
 else {
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
@@ -405,19 +379,19 @@ else {
     $headers.Add("Content-Type", "application/json")
     $body = "{`"certificate`":`"$($Specific.CertPem)`",`"chain`":`"$($Specific.ChainPem)`",`"key`":`"$($Specific.PrivKeyPem)`",`"passphrase`":`"$($Specific.EncryptPass)`"}"
     $response = Invoke-RestMethod 'https://portal.radwarecloud.com/v1/configuration/sslcertificates/secret' -Method 'POST' -Headers $headers -Body $body -TimeoutSec 30
-    $response | out-file -Append $DEBUG_FILE
+    $response | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     }
 
 <###############################
       Create Application
-###############################>
+###############################
 
     $newapp = $General.VarBool2.ToString() -eq "True"
     IF ($newapp){$headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-         "Create Application" | out-file -Append $DEBUG_FILE
+         "Create Application" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
         $headers.Add("Authorization", "Bearer $authorization_token")
         $headers.Add("requestEntityIds", "$TenantID`n")
-        $headers.Add("Content-Type", "application/json")
+        $headers.Add("Content-Type", "text/plain")
 
         $body = "{
         `n	`"applicationName`": `"$Text3`",
@@ -439,9 +413,9 @@ else {
 
         #$response = Invoke-RestMethod 'https://portal.radwarecloud.com/v1/configuration/applications/' -Method 'POST' -Headers $headers -Body $body} 
         $response | out-file -Append $global:log
-        }
+        #>
          } #end IF new cert
- "End New Cert" |  out-file -Append $DEBUG_FILE       
+ "End New Cert" |  out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue       
 <######################################################################################################################
 Renewed Certificate
 ######################################################################################################################
@@ -452,11 +426,11 @@ $thumb is the fingerprint of the current certificate in radware
 $thumbprint is the fingerprint of the renewed certificate from Venafi 
 ######################################################################################################################>
 IF ($vcn -in $certs) { # re-check IF cert exists
-"Common name exists" |out-file -Append $DEBUG_FILE
+"Common name exists" |out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 
  IF ($rcert.applications.count -eq 0) { # Check IF not bound to any apps
- "Unbound Certifgicate" | out-file -Append $DEBUG_FILE
- $rcert.applications.count | out-file -Append $DEBUG_FILE
+ "Unbound Certifgicate" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+ $rcert.applications.count | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 <###############################
       Delete Certificate
 ###############################>
@@ -468,21 +442,21 @@ IF ($vcn -in $certs) { # re-check IF cert exists
     `n
     `n}]"
 
-    "Delete Unbound Cert"|out-file -Append $DEBUG_FILE
-    "headers" |out-file -Append $DEBUG_FILE
-    $headers | fl >> $DEBUG_FILE 
+    "Delete Unbound Cert"|out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+    "headers" |out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+    $headers | fl >> $DEBUG_FILE -ErrorAction SilentlyContinue 
 
-    "Body $body" |out-file -Append $DEBUG_FILE
-    "$thumb :: $rcert"  |out-file -Append $DEBUG_FILE
+    "Body $body" |out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+    "$thumb :: $rcert"  |out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 
     $response = Invoke-RestMethod "https://portal.radwarecloud.com/v1/configuration/sslcertificates/$thumb" -Method 'DELETE' -Headers $headers -Body $body
-    $response | out-file -Append $DEBUG_FILE
+    $response | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds (5000 * $global:latency_factor)
 
 <###############################
       Upload Certificate
 ###############################>
-"Upload Unbound Cert"|out-file -Append $DEBUG_FILE
+"Upload Unbound Cert"|out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 $selfsigned = $General.VarBool1.ToString() -eq "True"
 If ($selfsigned) { #Checks if Private or Public CA
 #Install Cert 
@@ -493,7 +467,7 @@ If ($selfsigned) { #Checks if Private or Public CA
     $headers.Add("Content-Type", "application/json")
     $body = "{`"certificate`":`"$($Specific.CertPem)`",`"chain`":`"$($Specific.ChainPem)`",`"key`":`"$($Specific.PrivKeyPem)`",`"passphrase`":`"$($Specific.EncryptPass)`"}"
     $response = Invoke-RestMethod 'https://portal.radwarecloud.com/v1/configuration/sslcertificates/secret' -Method 'POST' -Headers $headers -Body $body -TimeoutSec 30
-    $response | out-file -Append $DEBUG_FILE
+    $response | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     }
 else {
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
@@ -503,7 +477,7 @@ else {
     $headers.Add("Content-Type", "application/json")
     $body = "{`"certificate`":`"$($Specific.CertPem)`",`"chain`":`"$($Specific.ChainPem)`",`"key`":`"$($Specific.PrivKeyPem)`",`"passphrase`":`"$($Specific.EncryptPass)`"}"
     $response = Invoke-RestMethod 'https://portal.radwarecloud.com/v1/configuration/sslcertificates/secret' -Method 'POST' -Headers $headers -Body $body -TimeoutSec 30
-    $response | out-file -Append $DEBUG_FILE
+    $response | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     }
        } #end IF Unbound Cert
 
@@ -514,13 +488,13 @@ else {
 $apps isall the applications bound to the certificate
 $app is the application being unbound/rebound 
 ######################################################################################################################>
-$rcert | out-file -Append  $DEBUG_FILE
-"App Count $($rcert.applications.count)" | out-file -Append $DEBUG_FILE
+$rcert | out-file -Append  $DEBUG_FILE -ErrorAction SilentlyContinue
+"App Count $($rcert.applications.count)" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 IF ($rcert.applications.count -ne 0 ) {
-"Bound Certificate" | out-file -Append $DEBUG_FILE
+"Bound Certificate" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     $apps = $rcert.applications |FL
-"Apps $apps" | out-file -Append $DEBUG_FILE
-$rcert.applications | out-file -Append $DEBUG_FILE
+"Apps $apps" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+$rcert.applications | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 
     foreach ($appID in $rcert.applications.applicationUUID) { 
 <###############################
@@ -531,9 +505,8 @@ $headers3 = New-Object "System.Collections.Generic.Dictionary[[String],[String]]
     $headers3.Add("Authorization", "Bearer $authorization_token")
     $headers3.Add("requestEntityIds", "$TenantID`n")
     $headers3.Add("applicationID", "$appID")
-    $headers.Add("Content-Type", "application/json")
     $App = Invoke-RestMethod "https://portal.radwarecloud.com/v1/gms/applications/$appID" -Method 'GET' -Headers $headers3
-    "APP $app" | out-file -Append $DEBUG_FILE
+    "APP $app" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     $appname = $app.name
     $servicesID =($app.applicationServices[0]).id
     $healthID =($app.healthChecks[0]).id 
@@ -543,54 +516,54 @@ $headers3 = New-Object "System.Collections.Generic.Dictionary[[String],[String]]
 <###############################
       Unbind Application
 ###############################>
-"Unbind App"  | out-file -Append $DEBUG_FILE
+"Unbind App"  | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
  set app variables
     $GcertID =$Gcert.id
-    "GcertID $GcertID" | out-file -Append $DEBUG_FILE
+    "GcertID $GcertID" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
    # UNbind Applications
 
             $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
             $headers.Add("requestEntityIds", "$TenantID`n")
             $headers.Add("Authorization","Bearer $authorization_token")
             $headers.Add("Content-Type", "application/json")
-            $headers | FL >>  $DEBUG_FILE
+            $headers | FL >>  $DEBUG_FILE -ErrorAction SilentlyContinue
             $body = "{`"applicationServices`":[{`"id`":`"$servicesID`",`"frontPort`":443,`"backPort`":443,`"type`":`"HTTPS`",`"description`":null,`"enabled`":true}],`"certificateId`":`"$Gcertid`",`"redirect`":null,`"healthChecks`":[{`"id`":`"$healthID`",`"type`":`"TCP`",`"port`":443,`"hostname`":null,`"url`":null,`"responseCode`":null}]}"
-            $body | out-file -Append $DEBUG_FILE
+            $body | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
             $response = Invoke-RestMethod "https://portal.radwarecloud.com/v1/configuration/applications/$appID/networkConfiguration" -Method 'PUT' -Headers $headers -Body $body          
-            $response | out-file -Append  $DEBUG_FILE
+            $response | out-file -Append  $DEBUG_FILE -ErrorAction SilentlyContinue
  }
 <###############################
       Delete Certificate
 ###############################>
+"5 min wait to delete cert"| out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 Start-Sleep -Seconds (300 * $global:latency_factor) # 5min
 
-    " Delete previously bound cert"  |out-file -Append $DEBUG_FILE
+    " Delete previously bound cert"  |out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
     $headers.Add("requestEntityIds", "$TenantID`n")
     $headers.Add("Authorization","Bearer $authorization_token")
-    $headers.Add("Content-Type", "application/json")
         $body = "[{
     `n
     `n}]"
 
 
-    "headers" |out-file -Append $DEBUG_FILE
-    $headers | fl >> $DEBUG_FILE 
+    "headers" |out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+    $headers | fl >> $DEBUG_FILE -ErrorAction SilentlyContinue 
 
-    "Body $body" |out-file -Append $DEBUG_FILE
-    "$thumb :: $rcert"  |out-file -Append $DEBUG_FILE
+    "Body $body" |out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+    "$thumb :: $rcert"  |out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 
     $response = Invoke-RestMethod "https://portal.radwarecloud.com/v1/configuration/sslcertificates/$thumb" -Method 'DELETE' -Headers $headers -Body $body
-    $response | out-file -Append $DEBUG_FILE
+    $response | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 
 Start-Sleep -Milliseconds (6000 * $global:latency_factor)
     
-
+"Uploading Cert"| out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 <###############################
       Upload Certificate
 ###############################>
 $selfsigned = $General.VarBool1.ToString() -eq "True"
-$selfsigned| out-file -Append $DEBUG_FILE
+$selfsigned| out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 If ($selfsigned) { #Checks if Private or Public CA
 #Install Cert 
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
@@ -600,7 +573,7 @@ If ($selfsigned) { #Checks if Private or Public CA
     $headers.Add("Content-Type", "application/json")
     $body = "{`"certificate`":`"$($Specific.CertPem)`",`"chain`":`"$($Specific.ChainPem)`",`"key`":`"$($Specific.PrivKeyPem)`",`"passphrase`":`"$($Specific.EncryptPass)`"}"
     $response = Invoke-RestMethod 'https://portal.radwarecloud.com/v1/configuration/sslcertificates/secret' -Method 'POST' -Headers $headers -Body $body -TimeoutSec 30
-    $response | out-file -Append $DEBUG_FILE
+    $response | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     }
 else {
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
@@ -610,11 +583,11 @@ else {
     $headers.Add("Content-Type", "application/json")
     $body = "{`"certificate`":`"$($Specific.CertPem)`",`"chain`":`"$($Specific.ChainPem)`",`"key`":`"$($Specific.PrivKeyPem)`",`"passphrase`":`"$($Specific.EncryptPass)`"}"
     $response = Invoke-RestMethod 'https://portal.radwarecloud.com/v1/configuration/sslcertificates/secret' -Method 'POST' -Headers $headers -Body $body -TimeoutSec 30
-    $response | out-file -Append $DEBUG_FILE
+    $response | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     }
     
 Start-Sleep -Seconds (20 * $global:latency_factor)
-
+"re-binding $($rcert.applications)"| out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 <###############################
       Re-Bind Application
 ###############################>
@@ -622,22 +595,20 @@ $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $headers.Add("Authorization", "Bearer $authorization_token")
 $headers.Add("requestEntityIds", "$TenantID`n")
 $headers.Add("applicationID", "")
-$headers.Add("Content-Type", "application/json")
 $Tenantcerts = Invoke-RestMethod 'https://portal.radwarecloud.com/v1/configuration/sslcertificates/' -Method 'GET' -Headers $headers
-"All Certs in Tenant" | out-file -Append $DEBUG_FILE
-$Tenantcerts | out-file -Append $DEBUG_FILE
+"All Certs in Tenant" | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
+$Tenantcerts | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
 Foreach ($cert in $Tenantcerts){
 if ($cert.fingerprint -eq $thumbprint){
 $certID = $cert.id }}
 
 foreach ($appID in $rcert.applications.applicationUUID) {
-"Rebind $apps" |out-file -Append $DEBUG_FILE
+"Rebind $apps" |out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
     
  # Get each app details 
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
     $headers.Add("Authorization", "Bearer $authorization_token")
     $headers.Add("requestEntityIds", "$tenantID")
-    $headers.Add("Content-Type", "application/json")
     $certapp = Invoke-RestMethod "https://portal.radwarecloud.com/v1/gms/applications/$appID" -Method 'GET' -Headers $headers
 
     #set app variables
@@ -650,11 +621,11 @@ foreach ($appID in $rcert.applications.applicationUUID) {
             $headers.Add("requestEntityIds", "$TenantID`n")
             $headers.Add("Authorization","Bearer $authorization_token")
             $headers.Add("Content-Type", "application/json")
-            $headers | FL >>  $DEBUG_FILE
+            $headers | FL >>  $DEBUG_FILE -ErrorAction SilentlyContinue
             $body = "{`"applicationServices`":[{`"id`":`"$servicesID`",`"frontPort`":443,`"backPort`":443,`"type`":`"HTTPS`",`"description`":null,`"enabled`":true}],`"certificateId`":`"$certid`",`"redirect`":null,`"healthChecks`":[{`"id`":`"$healthID`",`"type`":`"TCP`",`"port`":443,`"hostname`":null,`"url`":null,`"responseCode`":null}]}"
-            $body | out-file -Append $DEBUG_FILE
+            $body | out-file -Append $DEBUG_FILE -ErrorAction SilentlyContinue
             $response = Invoke-RestMethod "https://portal.radwarecloud.com/v1/configuration/applications/$appID/networkConfiguration" -Method 'PUT' -Headers $headers -Body $body          
-            $response | out-file -Append  $DEBUG_FILE
+            $response | out-file -Append  $DEBUG_FILE -ErrorAction SilentlyContinue
     
        } # Rebind Each previously bound App
  
@@ -800,10 +771,11 @@ Param(
         [Parameter(Mandatory=$true,HelpMessage="Function SpecIFic Parameters")]
         [System.Collections.Hashtable]$SpecIFic
     )
-
-clear-variable * -Scope Script -ErrorAction SilentlyContinue
     
     return @{ Result="Success"; }
 }
 
 <###################### THE FUNCTIONS AND CODE BELOW THIS LINE ARE NOT CALLED DIRECTLY BY VENAFI ######################>
+
+$global:latency_factor = 1.0
+$global:error_log = (Get-ItemProperty "HKLM:\SOFTWARE\Venafi\Platform")."Base Path" + "Logs\radware-error.log"
